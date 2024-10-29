@@ -1,36 +1,63 @@
-trigger:
-- main  # Change to your default branch
-
-pool:
-  vmImage: 'ubuntu-latest'  # Use a Windows agent if you prefer
-
 variables:
-  KeyVaultName: '<YOUR_KEY_VAULT_NAME>'
-  Organization: '<YOUR_ORGANIZATION>'
-  AzureDevOpsPAT: $(AzureDevOpsPAT)  # Define this secret in your pipeline variables
-  Scope: 'vso.build'  # Adjust scope as needed
+   group:  '<Name_of_PAT_Rotation_Args_VariableGroup>'
 
-jobs:
-- job: RotatePATs
-  displayName: 'Rotate Azure DevOps PATs'
-  steps:
-  - task: AzureCLI@2
-    inputs:
-      azureSubscription: '<Your Azure Subscription Service Connection>'
-      scriptType: 'ps'
-      scriptLocation: 'inlineScript'
-      inlineScript: |
-        # Install Azure CLI if not already available
-        if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
-            Install-Module -Name Az -AllowClobber -Scope CurrentUser -Force
-            Import-Module Az
-        }
+stages:
+    - stage: build
+      variables:
+      - group: '<Name_of_PAT_Rotation_Args_VariableGroup>'
+      jobs:
+      - job: main
+        pool:
+          vmImage: 'windows-2022'
 
-        # Run the PowerShell script
-        .\Rotate-PATs.ps1 -KeyVaultName $(KeyVaultName) -Organization $(Organization) -AzureDevOpsPAT $(AzureDevOpsPAT) -Scope $(Scope)
+        #Create packages directory to store package
+        steps:
+        - script: |
+            pwd 
+            mkdir packages 
+            cd packages 
+          displayName: 'Command Line Script'
 
-  - task: AzureKeyVault@2
-    inputs:
-      azureSubscription: '<Your Azure Subscription Service Connection>'
-      KeyVaultName: '$(KeyVaultName)'
-      SecretsFilter: '*'
+         #Set the nuget installer version
+        - task: NuGetToolInstaller@1
+          displayName: 'Use NuGet 6.1.0'
+          inputs:
+            versionSpec: 6.1.0
+            checkLatest: true
+          
+          #Install the PAT Rotation package NOTE: At the time of writing the latest stable package is version 0.0.174, however you can simply remove the "-version <version#>" portion to always install the latest version of the package by default
+        - task: NuGetCommand@2
+          displayName: 'Nuget install'
+          inputs:
+            command: custom
+            arguments: 'install 1ES.PATRotation.AKV -version 0.0.174 -source "https://pkgs.dev.azure.com/<YourAzDOOrgName>/<YourAzDOProjectName>/_packaging/<YourFeedName>/nuget/v3/index.json" -OutputDirectory packages'
+        
+         #Extract Powershell script that runs exe; NOTE: The file path should contain the version number that was downloaded in the previous step; If you pulled the latest package version you can check its number on your feed page. (When Authenticating with credentials)
+        - task: PowerShell@2         
+          displayName: 'Rotation with credentials'
+
+          inputs:
+
+              targetType: filePath
+
+              filePath: './packages/1ES.PATRotation.AKV.0.0.174/lib/PATRotationRunner.ps1'
+
+              arguments: '-ExePath $(ExePath) -RotateJobName $(RotateJobName) -SecretName $(SecretName) -KeyVaultUri $(KeyVaultUri-WUS2) -DontGeneratePAT $(DontGeneratePAT) -AadAppClientId $(AadAppId) -AadAppKey $(AadAppKey) -TenantId $(TenantId) -authOption $(authOption)'
+
+              pwsh: true
+
+  # if authennticating with MI:
+
+      - task: PowerShell@2
+
+        displayName: 'Rotation with MI'
+
+        inputs:
+
+              targetType: filePath
+
+              filePath: './packages/1ES.PATRotation.AKV.0.0.174/lib/PATRotationRunner.ps1'
+
+              arguments: '-ExePath $(ExePath) -RotateJobName $(RotateJobName) -SecretName $(SecretName) -KeyVaultUri $(KeyVaultUri-WUS2) -DontGeneratePAT $(DontGeneratePAT) -AadAppClientId $(AadAppId) -authOption $(authOption)'
+
+              pwsh: true
