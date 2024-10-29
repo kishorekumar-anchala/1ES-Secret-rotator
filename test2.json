@@ -1,0 +1,65 @@
+{
+  "variables": {
+    "group": "<Name_of_PAT_Rotation_Args_VariableGroup>"
+  },
+  "stages": [
+    {
+      "stage": "build",
+      "variables": [
+        {
+          "group": "<Name_of_PAT_Rotation_Args_VariableGroup>"
+        }
+      ],
+      "jobs": [
+        {
+          "job": "main",
+          "pool": {
+            "vmImage": "windows-2022"
+          },
+          "steps": [
+            {
+              "script": "pwd \nmkdir packages \ncd packages",
+              "displayName": "Command Line Script"
+            },
+            {
+              "task": "NuGetToolInstaller@1",
+              "displayName": "Use NuGet 6.1.0",
+              "inputs": {
+                "versionSpec": "6.1.0",
+                "checkLatest": true
+              }
+            },
+            {
+              "task": "NuGetCommand@2",
+              "displayName": "Nuget install",
+              "inputs": {
+                "command": "custom",
+                "arguments": "install 1ES.PATRotation.AKV -version 0.0.174 -source \"https://pkgs.dev.azure.com/<YourAzDOOrgName>/<YourAzDOProjectName>/_packaging/<YourFeedName>/nuget/v3/index.json\" -OutputDirectory packages"
+              }
+            },
+            {
+              "task": "PowerShell@2",
+              "displayName": "Rotation with credentials",
+              "inputs": {
+                "targetType": "filePath",
+                "filePath": "./packages/1ES.PATRotation.AKV.0.0.174/lib/PATRotationRunner.ps1",
+                "arguments": "-ExePath $(ExePath) -RotateJobName $(RotateJobName) -SecretName $(SecretName) -KeyVaultUri $(KeyVaultUri-WUS2) -DontGeneratePAT $(DontGeneratePAT) -AadAppClientId $(AadAppId) -AadAppKey $(AadAppKey) -TenantId $(TenantId) -authOption $(authOption)",
+                "pwsh": true
+              }
+            },
+            {
+              "task": "PowerShell@2",
+              "displayName": "Rotation with MI",
+              "inputs": {
+                "targetType": "filePath",
+                "filePath": "./packages/1ES.PATRotation.AKV.0.0.174/lib/PATRotationRunner.ps1",
+                "arguments": "-ExePath $(ExePath) -RotateJobName $(RotateJobName) -SecretName $(SecretName) -KeyVaultUri $(KeyVaultUri-WUS2) -DontGeneratePAT $(DontGeneratePAT) -AadAppClientId $(AadAppId) -authOption $(authOption)",
+                "pwsh": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
