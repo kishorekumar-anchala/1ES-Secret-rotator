@@ -1,0 +1,36 @@
+trigger:
+- main  # Change to your default branch
+
+pool:
+  vmImage: 'ubuntu-latest'  # Use a Windows agent if you prefer
+
+variables:
+  KeyVaultName: '<YOUR_KEY_VAULT_NAME>'
+  Organization: '<YOUR_ORGANIZATION>'
+  AzureDevOpsPAT: $(AzureDevOpsPAT)  # Define this secret in your pipeline variables
+  Scope: 'vso.build'  # Adjust scope as needed
+
+jobs:
+- job: RotatePATs
+  displayName: 'Rotate Azure DevOps PATs'
+  steps:
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: '<Your Azure Subscription Service Connection>'
+      scriptType: 'ps'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Install Azure CLI if not already available
+        if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+            Install-Module -Name Az -AllowClobber -Scope CurrentUser -Force
+            Import-Module Az
+        }
+
+        # Run the PowerShell script
+        .\Rotate-PATs.ps1 -KeyVaultName $(KeyVaultName) -Organization $(Organization) -AzureDevOpsPAT $(AzureDevOpsPAT) -Scope $(Scope)
+
+  - task: AzureKeyVault@2
+    inputs:
+      azureSubscription: '<Your Azure Subscription Service Connection>'
+      KeyVaultName: '$(KeyVaultName)'
+      SecretsFilter: '*'
